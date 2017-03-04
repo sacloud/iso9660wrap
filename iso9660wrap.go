@@ -1,20 +1,17 @@
-package main
-
+package iso9660wrap
 
 import (
 	"bufio"
 	"encoding/binary"
 	"fmt"
 	"io"
-	"log"
 	"math"
 	"os"
 	"strings"
 	"time"
 )
 
-const reservedAreaData string =
-`
+const reservedAreaData string = `
 Once upon a midnight dreary, while I pondered, weak and weary,
 Over many a quaint and curious volume of forgotten lore—
     While I nodded, nearly napping, suddenly there came a tapping,
@@ -155,57 +152,33 @@ const bigEndianPathTableSectorNum uint32 = littleEndianPathTableSectorNum + 1
 const numPathTableSectors = 2 // no secondaries
 const rootDirectorySectorNum uint32 = primaryVolumeSectorNum + numVolumeSectors + numPathTableSectors
 
-func printUsage() {
-	fmt.Fprintf(os.Stderr, "usage: %s INFILE OUTFILE\n", os.Args[0])
-}
-
-func main() {
-	if len(os.Args) == 2 && os.Args[1] == "--help" {
-		printUsage()
-		os.Exit(0)
-	} else if len(os.Args) != 3 {
-		printUsage()
-		os.Exit(1)
-	}
-
-	log.SetFlags(0)
-
-	infile := os.Args[1]
-	outfile := os.Args[2]
-
-	outfh, err := os.OpenFile(outfile, os.O_CREATE | os.O_EXCL | os.O_WRONLY, 0666)
-	if err != nil {
-		log.Fatalf("could not open output file %s for writing: %s", outfile, err)
-	}
-	infh, err := os.Open(infile)
-	if err != nil {
-		log.Fatalf("could not open input file %s for reading: %s", infile, err)
-	}
+// WriteFile writes the contents of infh to an iso at outfh with the name provided
+func WriteFile(outfh, infh *os.File) error {
 	inputFileSize, inputFilename, err := getInputFileSizeAndName(infh)
 	if err != nil {
-		log.Fatalf("could not read from input file %s: %s", infile, err)
+		return err
 	}
 	if inputFileSize == 0 {
-		log.Fatal("input file must be at least 1 byte in size")
+		return fmt.Errorf("input file must be at least 1 byte in size")
 	}
 	inputFilename = strings.ToUpper(inputFilename)
 	if !filenameSatisfiesISOConstraints(inputFilename) {
-		log.Fatalf("input file name %s does not satisfy the ISO9660 character set constraints", infile)
+		return fmt.Errorf("Input file name %s does not satisfy the ISO9660 character set constraints", inputFilename)
 	}
 
 	// reserved sectors
 	reservedAreaLength := int64(16 * SectorSize)
 	_, err = outfh.Write([]byte(reservedAreaData))
 	if err != nil {
-		log.Fatalf("could not write to output file: %s", err)
+		return fmt.Errorf("could not write to output file: %s", err)
 	}
 	err = outfh.Truncate(reservedAreaLength)
 	if err != nil {
-		log.Fatalf("could not truncate output file: %s", err)
+		return fmt.Errorf("could not truncate output file: %s", err)
 	}
 	_, err = outfh.Seek(reservedAreaLength, os.SEEK_SET)
 	if err != nil {
-		log.Fatalf("could not seek output file: %s", err)
+		return fmt.Errorf("could not seek output file: %s", err)
 	}
 
 	err = nil
@@ -239,8 +212,9 @@ func main() {
 		}
 	}()
 	if err != nil {
-		log.Fatalf("could not write to output file: %s", err)
+		return fmt.Errorf("could not write to output file: %s", err)
 	}
+	return nil
 }
 
 func writePrimaryVolumeDescriptor(w *ISO9660Writer, inputFileSize uint32, inputFilename string) {
@@ -286,8 +260,8 @@ func writePrimaryVolumeDescriptor(w *ISO9660Writer, inputFileSize uint32, inputF
 	sw.WritePaddedString("", 37) // abstract file identifier
 	sw.WritePaddedString("", 37) // bibliographical file identifier
 
-	sw.WriteDateTime(now) // volume creation
-	sw.WriteDateTime(now) // most recent modification
+	sw.WriteDateTime(now)         // volume creation
+	sw.WriteDateTime(now)         // most recent modification
 	sw.WriteUnspecifiedDateTime() // expires
 	sw.WriteUnspecifiedDateTime() // is effective (?)
 
@@ -315,8 +289,8 @@ func writePathTable(w *ISO9660Writer, bo binary.ByteOrder) {
 	sw.WriteByte(0) // number of sectors in extended attribute record
 	sw.WriteDWord(bo, rootDirectorySectorNum)
 	sw.WriteWord(bo, 1) // parent directory recno (root directory)
-	sw.WriteByte(0) // identifier (root directory)
-	sw.WriteByte(1) // padding
+	sw.WriteByte(0)     // identifier (root directory)
+	sw.WriteByte(1)     // padding
 	sw.PadWithZeros()
 }
 
@@ -328,7 +302,7 @@ func writeData(w *ISO9660Writer, infh io.Reader, inputFileSize uint32, inputFile
 
 	WriteDirectoryRecord(sw, "\x00", w.CurrentSector())
 	WriteDirectoryRecord(sw, "\x01", rootDirectorySectorNum)
-	WriteFileRecordHeader(sw, inputFilename, w.CurrentSector() + 1, inputFileSize)
+	WriteFileRecordHeader(sw, inputFilename, w.CurrentSector()+1, inputFileSize)
 
 	// Now stream the data.  Note that the first buffer is never of SectorSize,
 	// since we've already filled a part of the sector.
@@ -350,9 +324,9 @@ func writeData(w *ISO9660Writer, infh io.Reader, inputFileSize uint32, inputFile
 	}
 	if total != inputFileSize {
 		Panicf("input file size changed while the ISO file was being created (expected to read %d, read %d)", inputFileSize, total)
-	} else if w.CurrentSector() != numTotalSectors(inputFileSize) - 1 {
+	} else if w.CurrentSector() != numTotalSectors(inputFileSize)-1 {
 		Panicf("internal error: unexpected last sector number (expected %d, actual %d)",
-				numTotalSectors(inputFileSize) - 1, w.CurrentSector())
+			numTotalSectors(inputFileSize)-1, w.CurrentSector())
 	}
 }
 
@@ -374,7 +348,7 @@ func getInputFileSizeAndName(fh *os.File) (uint32, string, error) {
 }
 
 func filenameSatisfiesISOConstraints(filename string) bool {
-	invalidCharacter := func (r rune) bool {
+	invalidCharacter := func(r rune) bool {
 		// According to ISO9660, only capital letters, digits, and underscores
 		// are permitted.  Some sources say a dot is allowed as well.  I'm too
 		// lazy to figure it out right now.

@@ -1,6 +1,4 @@
 iso9660wrap
 ===========
+This turns the [iso9660wrap](https://github.com/johto/iso9660wrap) utility into a package. It provides a simple means to create an ISO9660 file containing a single file. 
 
-iso9660wrap is a simple command-line tool which wraps a single file into an
-ISO9660 format image.  The primary use case is quickly transferring a file or
-an archive into a virtual machine.

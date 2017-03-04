@@ -1,4 +1,4 @@
-package main
+package iso9660wrap
 
 import (
 	"encoding/binary"
@@ -42,7 +42,7 @@ func (w *SectorWriter) WriteUnspecifiedDateTime() uint32 {
 
 func (w *SectorWriter) WriteDateTime(t time.Time) uint32 {
 	f := t.UTC().Format("20060102150405")
-	f += "00" // 1/100
+	f += "00"   // 1/100
 	f += "\x00" // UTC offset
 	if len(f) != 17 {
 		Panicf("date and time field %q is of unexpected length %d", f, len(f))
@@ -59,7 +59,7 @@ func (w *SectorWriter) WritePaddedString(str string, length uint32) uint32 {
 	if l > 32 {
 		Panicf("padded string %q exceeds length %d", str, length)
 	} else if l < 32 {
-		w.WriteString(strings.Repeat(" ", int(32 - l)))
+		w.WriteString(strings.Repeat(" ", int(32-l)))
 	}
 	return 32
 }
@@ -116,9 +116,8 @@ func (w *SectorWriter) Reset() {
 	w.p = 0
 }
 
-
 type ISO9660Writer struct {
-	sw *SectorWriter
+	sw        *SectorWriter
 	sectorNum uint32
 }
 
