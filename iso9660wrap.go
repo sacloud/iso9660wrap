@@ -176,7 +176,7 @@ func WriteFile(outfh, infh *os.File) error {
 	return WriteBuffer(outfh, buf, filename)
 }
 
-// WriteBugger writes the contents of buf to an iso at outfh with the name provided
+// WriteBuffer writes the contents of buf to an iso at outfh with the name provided
 func WriteBuffer(outfh *os.File, buf []byte, filename string) error {
 	fileSize := uint32(len(buf))
 	if fileSize == 0 {
