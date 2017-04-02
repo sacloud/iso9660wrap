@@ -2,6 +2,7 @@ package iso9660wrap
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -166,9 +167,26 @@ func WriteFile(outfh, infh *os.File) error {
 		return fmt.Errorf("Input file name %s does not satisfy the ISO9660 character set constraints", filename)
 	}
 
+	buf := make([]byte, fileSize, fileSize)
+	_, err = infh.Read(buf)
+	if err != nil {
+		return err
+	}
+
+	return WriteBuffer(outfh, buf, filename)
+}
+
+// WriteBugger writes the contents of buf to an iso at outfh with the name provided
+func WriteBuffer(outfh *os.File, buf []byte, filename string) error {
+	fileSize := uint32(len(buf))
+	if fileSize == 0 {
+		return fmt.Errorf("input buffer must be at least 1 byte in size")
+	}
+	r := bytes.NewReader(buf)
+
 	// reserved sectors
 	reservedAreaLength := int64(16 * SectorSize)
-	_, err = outfh.Write([]byte(reservedAreaData))
+	_, err := outfh.Write([]byte(reservedAreaData))
 	if err != nil {
 		return fmt.Errorf("could not write to output file: %s", err)
 	}
@@ -202,7 +220,7 @@ func WriteFile(outfh, infh *os.File) error {
 		writeVolumeDescriptorSetTerminator(w)
 		writePathTable(w, binary.LittleEndian)
 		writePathTable(w, binary.BigEndian)
-		writeData(w, infh, fileSize, filename)
+		writeData(w, r, fileSize, filename)
 
 		w.Finish()
 
