@@ -16,7 +16,7 @@ type SectorWriter struct {
 }
 
 func (w *SectorWriter) Write(p []byte) uint32 {
-	if len(p) >= math.MaxUint32 {
+	if uint(len(p)) >= uint(math.MaxUint32) {
 		Panicf("attempted write of length %d is out of sector bounds", len(p))
 	}
 	l := uint32(len(p))
